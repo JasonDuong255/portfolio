@@ -152,6 +152,7 @@ on conflict (id) do nothing;
 
 create table if not exists public.portfolio_design_config (
   id text primary key default 'main',
+  active_theme_id text not null default 'default',
   theme_name text not null,
   background_image_url text not null,
   color_space text not null,
@@ -171,6 +172,36 @@ create table if not exists public.portfolio_design_config (
   pixel_scale numeric(3, 1) not null default 2
     check (pixel_scale >= 1 and pixel_scale <= 4),
   updated_at timestamptz not null default now()
+);
+
+alter table public.portfolio_design_config
+add column if not exists active_theme_id text not null default 'default';
+
+create table if not exists public.portfolio_themes (
+  site_id text not null default 'main',
+  id text not null,
+  sort_order integer not null default 0,
+  name text not null,
+  background_image_url text not null,
+  color_space text not null,
+  color_ink text not null,
+  color_panel text not null,
+  color_panel_soft text not null,
+  color_chrome_start text not null,
+  color_chrome_end text not null,
+  color_accent text not null,
+  color_accent_alt text not null,
+  color_text text not null,
+  color_muted text not null,
+  color_line text not null,
+  color_glow text not null,
+  scanline_opacity numeric(4, 3) not null default 0.22
+    check (scanline_opacity >= 0 and scanline_opacity <= 0.35),
+  pixel_scale numeric(3, 1) not null default 2
+    check (pixel_scale >= 1 and pixel_scale <= 4),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  primary key (site_id, id)
 );
 
 create table if not exists public.portfolio_web_ui_content (
@@ -322,6 +353,55 @@ select
 from public.portfolio_content
 where id = 'main'
 on conflict (id) do nothing;
+
+update public.portfolio_design_config
+set active_theme_id = 'default'
+where id = 'main' and coalesce(active_theme_id, '') = '';
+
+insert into public.portfolio_themes (
+  site_id,
+  id,
+  sort_order,
+  name,
+  background_image_url,
+  color_space,
+  color_ink,
+  color_panel,
+  color_panel_soft,
+  color_chrome_start,
+  color_chrome_end,
+  color_accent,
+  color_accent_alt,
+  color_text,
+  color_muted,
+  color_line,
+  color_glow,
+  scanline_opacity,
+  pixel_scale
+)
+select
+  'main',
+  portfolio_design_config.active_theme_id,
+  0,
+  theme_name,
+  background_image_url,
+  color_space,
+  color_ink,
+  color_panel,
+  color_panel_soft,
+  color_chrome_start,
+  color_chrome_end,
+  color_accent,
+  color_accent_alt,
+  color_text,
+  color_muted,
+  color_line,
+  color_glow,
+  scanline_opacity,
+  pixel_scale
+from public.portfolio_design_config
+where id = 'main'
+on conflict (site_id, id) do nothing;
 
 insert into public.portfolio_web_ui_content (
   id,
@@ -510,6 +590,7 @@ begin
   foreach table_name in array array[
     'portfolio_content',
     'portfolio_design_config',
+    'portfolio_themes',
     'portfolio_web_ui_content',
     'portfolio_profile_content',
     'portfolio_about_content',
@@ -661,7 +742,7 @@ using (
 -- values ('AUTH_USER_ID_HERE', 'you@example.com');
 
 -- The CMS now stores editable data in visible Supabase tables:
--- design: portfolio_design_config
+-- design: portfolio_design_config and portfolio_themes
 -- web UI labels: portfolio_web_ui_content
 -- portfolio content: portfolio_profile_content, portfolio_about_content,
 -- portfolio_presentation_content, portfolio_contacts,

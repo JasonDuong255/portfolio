@@ -1387,6 +1387,30 @@ img {
   gap: 12px;
 }
 
+.theme-library {
+  align-content: start;
+}
+
+.theme-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.theme-swatch-row {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 4px;
+  margin-top: 14px;
+}
+
+.theme-swatch-row span {
+  min-height: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 4px;
+}
+
 .image-input-row {
   display: grid;
   grid-template-columns: 76px minmax(0, 1fr);

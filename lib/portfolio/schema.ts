@@ -21,6 +21,15 @@ export const themeSchema = z.object({
   pixelScale: z.number().min(1).max(4)
 });
 
+export const portfolioThemePresetSchema = themeSchema.extend({
+  id: z.string().min(1)
+});
+
+export const portfolioThemeSettingsSchema = z.object({
+  activeThemeId: z.string().min(1),
+  themes: z.array(portfolioThemePresetSchema).min(1)
+});
+
 export const contactSchema = z.object({
   id: z.string().min(1),
   type: z.enum(["email", "linkedin", "behance", "instagram", "github", "website"]),
@@ -113,3 +122,5 @@ export const portfolioContentSchema = z.object({
 
 export type PortfolioContent = z.infer<typeof portfolioContentSchema>;
 export type PortfolioTheme = z.infer<typeof themeSchema>;
+export type PortfolioThemePreset = z.infer<typeof portfolioThemePresetSchema>;
+export type PortfolioThemeSettings = z.infer<typeof portfolioThemeSettingsSchema>;

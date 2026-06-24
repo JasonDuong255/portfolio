@@ -3,7 +3,10 @@ import { redirect } from "next/navigation";
 import { AdminEditor } from "@/components/admin/AdminEditor";
 import { signOutAction } from "@/app/admin/actions";
 import { getAdminStatus } from "@/lib/admin/auth";
-import { getPortfolioContent } from "@/lib/portfolio/storage";
+import {
+  getPortfolioContent,
+  getPortfolioThemeSettings
+} from "@/lib/portfolio/storage";
 
 export const dynamic = "force-dynamic";
 
@@ -38,7 +41,10 @@ export default async function AdminPage() {
     );
   }
 
-  const content = await getPortfolioContent();
+  const [content, themeSettings] = await Promise.all([
+    getPortfolioContent(),
+    getPortfolioThemeSettings()
+  ]);
 
   return (
     <main className="admin-shell">
@@ -54,7 +60,12 @@ export default async function AdminPage() {
           </form>
         </nav>
       </header>
-      <AdminEditor initialContent={content} adminEmail={status.email ?? "admin"} />
+      <AdminEditor
+        initialActiveThemeId={themeSettings.activeThemeId}
+        initialContent={content}
+        initialThemes={themeSettings.themes}
+        adminEmail={status.email ?? "admin"}
+      />
     </main>
   );
 }

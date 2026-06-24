@@ -1,8 +1,15 @@
 import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
 import { assertAdmin } from "@/lib/admin/auth";
-import { portfolioContentSchema } from "@/lib/portfolio/schema";
-import { getPortfolioContent, savePortfolioContent } from "@/lib/portfolio/storage";
+import {
+  portfolioContentSchema,
+  portfolioThemeSettingsSchema
+} from "@/lib/portfolio/schema";
+import {
+  getPortfolioContent,
+  getPortfolioThemeSettings,
+  savePortfolioContent
+} from "@/lib/portfolio/storage";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -13,7 +20,8 @@ export async function GET() {
 
     return NextResponse.json({
       ok: true,
-      content: await getPortfolioContent()
+      content: await getPortfolioContent(),
+      themeSettings: await getPortfolioThemeSettings()
     });
   } catch (error) {
     return NextResponse.json(
@@ -40,8 +48,16 @@ async function upsertContent(request: Request) {
     await assertAdmin();
 
     const json = (await request.json()) as unknown;
-    const content = portfolioContentSchema.parse(json);
-    const { error } = await savePortfolioContent(content);
+    const body = isRecord(json) && "content" in json ? json : null;
+    const content = portfolioContentSchema.parse(body ? body.content : json);
+    const themeSettings =
+      body && "themes" in body && "activeThemeId" in body
+        ? portfolioThemeSettingsSchema.parse({
+            themes: body.themes,
+            activeThemeId: body.activeThemeId
+          })
+        : undefined;
+    const { error } = await savePortfolioContent(content, themeSettings);
 
     if (error) {
       return NextResponse.json(
@@ -67,6 +83,10 @@ async function upsertContent(request: Request) {
       { status: getErrorStatus(error) }
     );
   }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function getErrorStatus(error: unknown) {

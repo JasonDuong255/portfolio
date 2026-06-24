@@ -3,9 +3,12 @@ import path from "node:path";
 import { getSupabaseEnv } from "@/lib/env";
 import { defaultPortfolioContent } from "@/lib/portfolio/default-content";
 import {
+  portfolioThemeSettingsSchema,
   portfolioContentSchema,
   type PortfolioContent,
-  type PortfolioTheme
+  type PortfolioTheme,
+  type PortfolioThemePreset,
+  type PortfolioThemeSettings
 } from "@/lib/portfolio/schema";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -24,7 +27,28 @@ type ListResult<T> = {
 };
 
 type DesignRow = {
+  active_theme_id: string | null;
   theme_name: string | null;
+  background_image_url: string | null;
+  color_space: string | null;
+  color_ink: string | null;
+  color_panel: string | null;
+  color_panel_soft: string | null;
+  color_chrome_start: string | null;
+  color_chrome_end: string | null;
+  color_accent: string | null;
+  color_accent_alt: string | null;
+  color_text: string | null;
+  color_muted: string | null;
+  color_line: string | null;
+  color_glow: string | null;
+  scanline_opacity: number | string | null;
+  pixel_scale: number | string | null;
+};
+
+type ThemeRow = {
+  id: string | null;
+  name: string | null;
   background_image_url: string | null;
   color_space: string | null;
   color_ink: string | null;
@@ -111,6 +135,7 @@ export async function getPortfolioContent(): Promise<PortfolioContent> {
   const supabase = await createSupabaseServerClient();
   const [
     design,
+    themes,
     ui,
     profile,
     about,
@@ -125,6 +150,13 @@ export async function getPortfolioContent(): Promise<PortfolioContent> {
         .select("*")
         .eq("id", CONTENT_ID)
         .maybeSingle()
+    ),
+    asList<ThemeRow>(
+      supabase
+        .from("portfolio_themes")
+        .select("*")
+        .eq("site_id", CONTENT_ID)
+        .order("sort_order", { ascending: true })
     ),
     asSingle<WebUiRow>(
       supabase
@@ -177,13 +209,24 @@ export async function getPortfolioContent(): Promise<PortfolioContent> {
     )
   ]);
 
-  const reads = [design, ui, profile, about, presentation, contacts, software, projects];
+  const reads = [
+    design,
+    themes,
+    ui,
+    profile,
+    about,
+    presentation,
+    contacts,
+    software,
+    projects
+  ];
   if (reads.some((result) => result.error)) {
     return getLegacyPortfolioContent(supabase);
   }
 
   const hasStructuredRows = Boolean(
     design.data ||
+      themes.data?.length ||
       ui.data ||
       profile.data ||
       about.data ||
@@ -197,6 +240,7 @@ export async function getPortfolioContent(): Promise<PortfolioContent> {
     return getLegacyPortfolioContent(supabase);
   }
 
+  const themeSettings = resolveThemeSettings(themes.data, design.data);
   const content: PortfolioContent = {
     profile: mapProfile(profile.data),
     contacts: mapContacts(contacts.data),
@@ -206,7 +250,7 @@ export async function getPortfolioContent(): Promise<PortfolioContent> {
       software: mapSoftware(software.data)
     },
     projects: mapProjects(projects.data),
-    theme: mapTheme(design.data),
+    theme: themeSettings.activeTheme,
     ui: mapWebUi(ui.data)
   };
 
@@ -214,7 +258,40 @@ export async function getPortfolioContent(): Promise<PortfolioContent> {
   return withSafeAssetPaths(parsed.success ? parsed.data : defaultPortfolioContent);
 }
 
-export async function savePortfolioContent(content: PortfolioContent): Promise<{
+export async function getPortfolioThemeSettings(): Promise<PortfolioThemeSettings> {
+  if (!getSupabaseEnv().isConfigured) {
+    return getDefaultThemeSettings();
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const [design, themes] = await Promise.all([
+    asSingle<DesignRow>(
+      supabase
+        .from("portfolio_design_config")
+        .select("*")
+        .eq("id", CONTENT_ID)
+        .maybeSingle()
+    ),
+    asList<ThemeRow>(
+      supabase
+        .from("portfolio_themes")
+        .select("*")
+        .eq("site_id", CONTENT_ID)
+        .order("sort_order", { ascending: true })
+    )
+  ]);
+
+  if (design.error || themes.error) {
+    return getDefaultThemeSettings();
+  }
+
+  return resolveThemeSettings(themes.data, design.data).settings;
+}
+
+export async function savePortfolioContent(
+  content: PortfolioContent,
+  themeSettings?: PortfolioThemeSettings
+): Promise<{
   error: Error | null;
 }> {
   const parsed = portfolioContentSchema.safeParse(content);
@@ -222,12 +299,29 @@ export async function savePortfolioContent(content: PortfolioContent): Promise<{
     return { error: new Error(parsed.error.message) };
   }
 
-  const next = parsed.data;
+  const themeSettingsResult = themeSettings
+    ? portfolioThemeSettingsSchema.safeParse(themeSettings)
+    : portfolioThemeSettingsSchema.safeParse(getThemeSettingsFromTheme(parsed.data.theme));
+
+  if (!themeSettingsResult.success) {
+    return { error: new Error(themeSettingsResult.error.message) };
+  }
+
+  const settings = normalizeThemeSettings(themeSettingsResult.data);
+  const activeTheme =
+    settings.themes.find((theme) => theme.id === settings.activeThemeId) ??
+    settings.themes[0];
+  const next = {
+    ...parsed.data,
+    theme: themeToContentTheme(activeTheme)
+  };
   const supabase = createSupabaseAdminClient();
   const updatedAt = new Date().toISOString();
 
   const singleWrites = [
-    supabase.from("portfolio_design_config").upsert(toDesignRow(next, updatedAt)),
+    supabase
+      .from("portfolio_design_config")
+      .upsert(toDesignRow(next, updatedAt, settings.activeThemeId)),
     supabase.from("portfolio_web_ui_content").upsert(toWebUiRow(next, updatedAt)),
     supabase.from("portfolio_profile_content").upsert(toProfileRow(next, updatedAt)),
     supabase.from("portfolio_about_content").upsert(toAboutRow(next, updatedAt)),
@@ -244,6 +338,32 @@ export async function savePortfolioContent(content: PortfolioContent): Promise<{
   }
 
   const listWrites = [
+    replaceRows(
+      supabase,
+      "portfolio_themes",
+      settings.themes.map((theme, index) => ({
+        site_id: CONTENT_ID,
+        id: theme.id,
+        sort_order: index,
+        name: theme.name,
+        background_image_url: theme.backgroundImageUrl,
+        color_space: theme.colors.space,
+        color_ink: theme.colors.ink,
+        color_panel: theme.colors.panel,
+        color_panel_soft: theme.colors.panelSoft,
+        color_chrome_start: theme.colors.chromeStart,
+        color_chrome_end: theme.colors.chromeEnd,
+        color_accent: theme.colors.accent,
+        color_accent_alt: theme.colors.accentAlt,
+        color_text: theme.colors.text,
+        color_muted: theme.colors.muted,
+        color_line: theme.colors.line,
+        color_glow: theme.colors.glow,
+        scanline_opacity: theme.scanlineOpacity,
+        pixel_scale: theme.pixelScale,
+        updated_at: updatedAt
+      }))
+    ),
     replaceRows(
       supabase,
       "portfolio_contacts",
@@ -351,8 +471,120 @@ function asList<T>(query: unknown) {
   return query as PromiseLike<ListResult<T>>;
 }
 
-function mapTheme(row: DesignRow | null): PortfolioTheme {
-  const fallback = defaultPortfolioContent.theme;
+function resolveThemeSettings(
+  rows: ThemeRow[] | null,
+  design: DesignRow | null
+) {
+  const legacyTheme = mapTheme(design);
+  const fallbackSettings = getThemeSettingsFromTheme(legacyTheme);
+  const themes = rows?.length
+    ? rows.map((row, index) => mapThemePreset(row, index, legacyTheme))
+    : fallbackSettings.themes;
+  const activeThemeId = themes.some(
+    (theme) => theme.id === design?.active_theme_id
+  )
+    ? String(design?.active_theme_id)
+    : themes[0].id;
+  const settings = normalizeThemeSettings({ activeThemeId, themes });
+  const activeTheme =
+    settings.themes.find((theme) => theme.id === settings.activeThemeId) ??
+    settings.themes[0];
+
+  return {
+    settings,
+    activeTheme: themeToContentTheme(activeTheme)
+  };
+}
+
+function getDefaultThemeSettings(): PortfolioThemeSettings {
+  return getThemeSettingsFromTheme(defaultPortfolioContent.theme);
+}
+
+function getThemeSettingsFromTheme(theme: PortfolioTheme): PortfolioThemeSettings {
+  const id = makeThemeId(theme.name);
+
+  return {
+    activeThemeId: id,
+    themes: [
+      {
+        id,
+        ...theme
+      }
+    ]
+  };
+}
+
+function normalizeThemeSettings(
+  settings: PortfolioThemeSettings
+): PortfolioThemeSettings {
+  const seen = new Set<string>();
+  const themes = settings.themes.map((theme, index) => {
+    const fallbackId = `theme-${index + 1}`;
+    let id = textOr(theme.id, fallbackId);
+    while (seen.has(id)) {
+      id = `${id}-${index + 1}`;
+    }
+    seen.add(id);
+
+    return {
+      ...theme,
+      id
+    };
+  });
+  const activeThemeId = themes.some((theme) => theme.id === settings.activeThemeId)
+    ? settings.activeThemeId
+    : themes[0].id;
+
+  return { activeThemeId, themes };
+}
+
+function mapThemePreset(
+  row: ThemeRow,
+  index: number,
+  fallback: PortfolioTheme
+): PortfolioThemePreset {
+  return {
+    id: textOr(row.id, `theme-${index + 1}`),
+    ...mapTheme({
+      active_theme_id: null,
+      theme_name: row.name,
+      background_image_url: row.background_image_url,
+      color_space: row.color_space,
+      color_ink: row.color_ink,
+      color_panel: row.color_panel,
+      color_panel_soft: row.color_panel_soft,
+      color_chrome_start: row.color_chrome_start,
+      color_chrome_end: row.color_chrome_end,
+      color_accent: row.color_accent,
+      color_accent_alt: row.color_accent_alt,
+      color_text: row.color_text,
+      color_muted: row.color_muted,
+      color_line: row.color_line,
+      color_glow: row.color_glow,
+      scanline_opacity: row.scanline_opacity,
+      pixel_scale: row.pixel_scale
+    } satisfies DesignRow, fallback)
+  };
+}
+
+function themeToContentTheme(theme: PortfolioThemePreset): PortfolioTheme {
+  const { id: _id, ...contentTheme } = theme;
+  return contentTheme;
+}
+
+function makeThemeId(name: string) {
+  const id = name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+
+  return id || "default";
+}
+
+function mapTheme(
+  row: DesignRow | null,
+  fallback: PortfolioTheme = defaultPortfolioContent.theme
+): PortfolioTheme {
 
   return {
     name: textOr(row?.theme_name, fallback.name),
@@ -487,9 +719,14 @@ function mapProjects(rows: ProjectRow[] | null): PortfolioContent["projects"] {
   }));
 }
 
-function toDesignRow(content: PortfolioContent, updatedAt: string) {
+function toDesignRow(
+  content: PortfolioContent,
+  updatedAt: string,
+  activeThemeId: string
+) {
   return {
     id: CONTENT_ID,
+    active_theme_id: activeThemeId,
     theme_name: content.theme.name,
     background_image_url: content.theme.backgroundImageUrl,
     color_space: content.theme.colors.space,

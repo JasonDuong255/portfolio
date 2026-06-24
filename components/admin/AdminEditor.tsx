@@ -21,7 +21,11 @@ import {
   Upload,
   UserRound
 } from "lucide-react";
-import type { PortfolioContent } from "@/lib/portfolio/schema";
+import type {
+  PortfolioContent,
+  PortfolioTheme,
+  PortfolioThemePreset
+} from "@/lib/portfolio/schema";
 
 type SaveState = {
   ok: boolean;
@@ -101,16 +105,35 @@ const contactTypes: ContactType[] = [
 ];
 
 export function AdminEditor({
+  initialActiveThemeId,
   initialContent,
+  initialThemes,
   adminEmail
 }: {
+  initialActiveThemeId: string;
   initialContent: PortfolioContent;
+  initialThemes: PortfolioThemePreset[];
   adminEmail: string;
 }) {
+  const initialThemeLibrary = ensureThemeLibrary(
+    initialThemes,
+    initialContent.theme
+  );
+  const initialThemeId = getValidThemeId(
+    initialActiveThemeId,
+    initialThemeLibrary
+  );
   const [content, setContent] = useState(() => structuredClone(initialContent));
   const [savedContent, setSavedContent] = useState(() =>
     structuredClone(initialContent)
   );
+  const [themes, setThemes] = useState(() => structuredClone(initialThemeLibrary));
+  const [savedThemes, setSavedThemes] = useState(() =>
+    structuredClone(initialThemeLibrary)
+  );
+  const [activeThemeId, setActiveThemeId] = useState(initialThemeId);
+  const [savedActiveThemeId, setSavedActiveThemeId] = useState(initialThemeId);
+  const [selectedThemeId, setSelectedThemeId] = useState(initialThemeId);
   const [activeSection, setActiveSection] = useState<SectionId>("design");
   const [state, setState] = useState<SaveState>(initialState);
   const [pendingSection, setPendingSection] = useState<SectionId | null>(null);
@@ -122,8 +145,12 @@ export function AdminEditor({
   }, []);
 
   const dirty = useMemo(() => {
-    return JSON.stringify(content) !== JSON.stringify(savedContent);
-  }, [content, savedContent]);
+    return (
+      JSON.stringify(content) !== JSON.stringify(savedContent) ||
+      JSON.stringify(themes) !== JSON.stringify(savedThemes) ||
+      activeThemeId !== savedActiveThemeId
+    );
+  }, [activeThemeId, content, savedActiveThemeId, savedContent, savedThemes, themes]);
 
   const active = sectionConfig[activeSection];
   const ActiveIcon = active.icon;
@@ -133,6 +160,8 @@ export function AdminEditor({
     onRefreshAssets: refreshAssets,
     onUploadAsset: uploadAsset
   };
+  const selectedTheme =
+    themes.find((theme) => theme.id === selectedThemeId) ?? themes[0];
 
   function updateContent(mutator: (next: PortfolioContent) => void) {
     setContent((current) => {
@@ -140,6 +169,103 @@ export function AdminEditor({
       mutator(next);
       return next;
     });
+    setState(initialState);
+  }
+
+  function updateSelectedTheme(mutator: (next: PortfolioThemePreset) => void) {
+    setThemes((current) => {
+      const nextThemes = current.map((theme) => {
+        if (theme.id !== selectedTheme.id) {
+          return theme;
+        }
+
+        const nextTheme = structuredClone(theme);
+        mutator(nextTheme);
+        return nextTheme;
+      });
+      const activeTheme = nextThemes.find((theme) => theme.id === activeThemeId);
+
+      if (activeTheme && selectedTheme.id === activeThemeId) {
+        setContent((currentContent) => {
+          const nextContent = structuredClone(currentContent);
+          nextContent.theme = themeToContentTheme(activeTheme);
+          return nextContent;
+        });
+      }
+
+      return nextThemes;
+    });
+    setState(initialState);
+  }
+
+  function selectTheme(themeId: string) {
+    setSelectedThemeId(themeId);
+    setState(initialState);
+  }
+
+  function chooseActiveTheme(themeId: string) {
+    const theme = themes.find((item) => item.id === themeId);
+    if (!theme) {
+      return;
+    }
+
+    setActiveThemeId(themeId);
+    setSelectedThemeId(themeId);
+    setContent((current) => {
+      const next = structuredClone(current);
+      next.theme = themeToContentTheme(theme);
+      return next;
+    });
+    setState(initialState);
+  }
+
+  function addTheme() {
+    const baseTheme = selectedTheme ?? themes[0];
+    const id = makeId("theme");
+    const theme: PortfolioThemePreset = {
+      ...structuredClone(baseTheme),
+      id,
+      name: "New theme"
+    };
+
+    setThemes((current) => [...current, theme]);
+    setSelectedThemeId(id);
+    setState(initialState);
+  }
+
+  function duplicateTheme() {
+    const baseTheme = selectedTheme ?? themes[0];
+    const id = makeId("theme");
+    const theme: PortfolioThemePreset = {
+      ...structuredClone(baseTheme),
+      id,
+      name: `${baseTheme.name} copy`
+    };
+
+    setThemes((current) => [...current, theme]);
+    setSelectedThemeId(id);
+    setState(initialState);
+  }
+
+  function removeSelectedTheme() {
+    if (themes.length <= 1) {
+      return;
+    }
+
+    const remaining = themes.filter((theme) => theme.id !== selectedTheme.id);
+    const nextActiveThemeId =
+      selectedTheme.id === activeThemeId ? remaining[0].id : activeThemeId;
+
+    setThemes(remaining);
+    setSelectedThemeId(nextActiveThemeId);
+    setActiveThemeId(nextActiveThemeId);
+    if (nextActiveThemeId !== activeThemeId) {
+      setContent((current) => {
+        const next = structuredClone(current);
+        next.theme = themeToContentTheme(remaining[0]);
+        return next;
+      });
+    }
     setState(initialState);
   }
 
@@ -225,12 +351,17 @@ export function AdminEditor({
     setState(initialState);
 
     try {
+      const contentToSave = getContentForSave(content, themes, activeThemeId);
       const response = await fetch("/api/admin/content", {
         method: "PUT",
         headers: {
           "Content-Type": "application/json"
         },
-        body: JSON.stringify(content)
+        body: JSON.stringify({
+          content: contentToSave,
+          themes,
+          activeThemeId
+        })
       });
       const result = (await response.json().catch(() => null)) as {
         ok?: boolean;
@@ -245,7 +376,10 @@ export function AdminEditor({
         return;
       }
 
-      setSavedContent(structuredClone(content));
+      setContent(structuredClone(contentToSave));
+      setSavedContent(structuredClone(contentToSave));
+      setSavedThemes(structuredClone(themes));
+      setSavedActiveThemeId(activeThemeId);
       setState({
         ok: true,
         message: `Saved ${sectionConfig[section].label.toLowerCase()} fields.`
@@ -268,6 +402,9 @@ export function AdminEditor({
 
   function resetChanges() {
     setContent(structuredClone(savedContent));
+    setThemes(structuredClone(savedThemes));
+    setActiveThemeId(savedActiveThemeId);
+    setSelectedThemeId(savedActiveThemeId);
     setState({
       ok: true,
       message: "Reset unsaved changes."
@@ -372,9 +509,17 @@ export function AdminEditor({
         <div className="editor-body">
           {activeSection === "design" ? (
             <DesignSection
-              content={content}
-              updateContent={updateContent}
+              activeThemeId={activeThemeId}
               imageTools={imageTools}
+              onAddTheme={addTheme}
+              onChooseActiveTheme={chooseActiveTheme}
+              onDuplicateTheme={duplicateTheme}
+              onRemoveTheme={removeSelectedTheme}
+              onSelectTheme={selectTheme}
+              selectedTheme={selectedTheme}
+              selectedThemeId={selectedThemeId}
+              themes={themes}
+              updateTheme={updateSelectedTheme}
             />
           ) : null}
           {activeSection === "ui" ? (
@@ -426,33 +571,110 @@ export function AdminEditor({
 }
 
 function DesignSection({
-  content,
-  updateContent,
-  imageTools
+  activeThemeId,
+  imageTools,
+  onAddTheme,
+  onChooseActiveTheme,
+  onDuplicateTheme,
+  onRemoveTheme,
+  onSelectTheme,
+  selectedTheme,
+  selectedThemeId,
+  themes,
+  updateTheme
 }: {
-  content: PortfolioContent;
-  updateContent: (mutator: (next: PortfolioContent) => void) => void;
+  activeThemeId: string;
   imageTools: ImageTools;
+  onAddTheme: () => void;
+  onChooseActiveTheme: (themeId: string) => void;
+  onDuplicateTheme: () => void;
+  onRemoveTheme: () => void;
+  onSelectTheme: (themeId: string) => void;
+  selectedTheme: PortfolioThemePreset;
+  selectedThemeId: string;
+  themes: PortfolioThemePreset[];
+  updateTheme: (mutator: (next: PortfolioThemePreset) => void) => void;
 }) {
   return (
     <div className="editor-columns">
+      <fieldset className="field-group theme-library">
+        <legend>Theme library</legend>
+        <label className="field">
+          <span>Theme to display</span>
+          <select
+            value={activeThemeId}
+            onChange={(event) => onChooseActiveTheme(event.target.value)}
+          >
+            {themes.map((theme) => (
+              <option value={theme.id} key={theme.id}>
+                {theme.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="field">
+          <span>Theme to configure</span>
+          <select
+            value={selectedThemeId}
+            onChange={(event) => onSelectTheme(event.target.value)}
+          >
+            {themes.map((theme) => (
+              <option value={theme.id} key={theme.id}>
+                {theme.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <div className="theme-actions">
+          <button className="ghost-button compact-button" type="button" onClick={onAddTheme}>
+            <Plus size={15} aria-hidden="true" />
+            New
+          </button>
+          <button
+            className="ghost-button compact-button"
+            type="button"
+            onClick={onDuplicateTheme}
+          >
+            <RefreshCw size={15} aria-hidden="true" />
+            Duplicate
+          </button>
+          <button
+            className="danger-button"
+            type="button"
+            disabled={themes.length <= 1}
+            onClick={onRemoveTheme}
+          >
+            <Trash2 size={15} aria-hidden="true" />
+            Remove
+          </button>
+        </div>
+        <div className="theme-swatch-row" aria-hidden="true">
+          {Object.entries(selectedTheme.colors).map(([key, value]) => (
+            <span
+              key={key}
+              style={{ background: value.startsWith("#") ? value : selectedTheme.colors.accent }}
+            />
+          ))}
+        </div>
+      </fieldset>
+
       <fieldset className="field-group">
         <legend>Theme identity</legend>
         <TextField
           label="Theme name"
-          value={content.theme.name}
+          value={selectedTheme.name}
           onChange={(value) =>
-            updateContent((next) => {
-              next.theme.name = value;
+            updateTheme((next) => {
+              next.name = value;
             })
           }
         />
         <ImageField
           label="Background image"
-          value={content.theme.backgroundImageUrl}
+          value={selectedTheme.backgroundImageUrl}
           onChange={(value) =>
-            updateContent((next) => {
-              next.theme.backgroundImageUrl = value;
+            updateTheme((next) => {
+              next.backgroundImageUrl = value;
             })
           }
           imageTools={imageTools}
@@ -465,14 +687,14 @@ function DesignSection({
               min="0"
               max="0.35"
               step="0.01"
-              value={content.theme.scanlineOpacity}
+              value={selectedTheme.scanlineOpacity}
               onChange={(event) =>
-                updateContent((next) => {
-                  next.theme.scanlineOpacity = Number(event.target.value);
+                updateTheme((next) => {
+                  next.scanlineOpacity = Number(event.target.value);
                 })
               }
             />
-            <small>{content.theme.scanlineOpacity.toFixed(2)}</small>
+            <small>{selectedTheme.scanlineOpacity.toFixed(2)}</small>
           </label>
           <label className="field">
             <span>Pixel scale</span>
@@ -480,10 +702,10 @@ function DesignSection({
               type="number"
               min="1"
               max="4"
-              value={content.theme.pixelScale}
+              value={selectedTheme.pixelScale}
               onChange={(event) =>
-                updateContent((next) => {
-                  next.theme.pixelScale = Number(event.target.value);
+                updateTheme((next) => {
+                  next.pixelScale = Number(event.target.value);
                 })
               }
             />
@@ -495,7 +717,7 @@ function DesignSection({
         <legend>Color system</legend>
         <div className="color-grid">
           {colorLabels.map(([key, label]) => {
-            const value = content.theme.colors[key];
+            const value = selectedTheme.colors[key];
             const isColor = value.startsWith("#");
 
             return (
@@ -508,8 +730,8 @@ function DesignSection({
                       type="color"
                       value={value}
                       onChange={(event) =>
-                        updateContent((next) => {
-                          next.theme.colors[key] = event.target.value;
+                        updateTheme((next) => {
+                          next.colors[key] = event.target.value;
                         })
                       }
                     />
@@ -519,8 +741,8 @@ function DesignSection({
                   <input
                     value={value}
                     onChange={(event) =>
-                      updateContent((next) => {
-                        next.theme.colors[key] = event.target.value;
+                      updateTheme((next) => {
+                        next.colors[key] = event.target.value;
                       })
                     }
                   />
@@ -1320,6 +1542,43 @@ function RemoveButton({
       {label}
     </button>
   );
+}
+
+function ensureThemeLibrary(
+  themes: PortfolioThemePreset[],
+  fallbackTheme: PortfolioTheme
+) {
+  if (themes.length > 0) {
+    return themes;
+  }
+
+  return [
+    {
+      id: "default",
+      ...fallbackTheme
+    }
+  ];
+}
+
+function getValidThemeId(themeId: string, themes: PortfolioThemePreset[]) {
+  return themes.some((theme) => theme.id === themeId) ? themeId : themes[0].id;
+}
+
+function getContentForSave(
+  content: PortfolioContent,
+  themes: PortfolioThemePreset[],
+  activeThemeId: string
+) {
+  const activeTheme =
+    themes.find((theme) => theme.id === activeThemeId) ?? themes[0];
+  const next = structuredClone(content);
+  next.theme = themeToContentTheme(activeTheme);
+  return next;
+}
+
+function themeToContentTheme(theme: PortfolioThemePreset): PortfolioTheme {
+  const { id: _id, ...contentTheme } = theme;
+  return contentTheme;
 }
 
 function makeId(prefix: string) {

@@ -1,6 +1,12 @@
 "use client";
 
-import { type FormEvent, useMemo, useState } from "react";
+import {
+  type ChangeEvent,
+  type FormEvent,
+  useEffect,
+  useMemo,
+  useState
+} from "react";
 import {
   ChevronDown,
   FolderKanban,
@@ -8,9 +14,11 @@ import {
   Monitor,
   Palette,
   Plus,
+  RefreshCw,
   RotateCcw,
   Save,
   Trash2,
+  Upload,
   UserRound
 } from "lucide-react";
 import type { PortfolioContent } from "@/lib/portfolio/schema";
@@ -23,6 +31,21 @@ type SaveState = {
 type SectionId = "design" | "ui" | "portfolio";
 type ContactType = PortfolioContent["contacts"][number]["type"];
 type ThemeColor = keyof PortfolioContent["theme"]["colors"];
+type PortfolioAsset = {
+  id: string;
+  name: string;
+  path: string;
+  publicUrl: string;
+  mimeType: string | null;
+  size: number | null;
+  createdAt: string | null;
+};
+type ImageTools = {
+  assets: PortfolioAsset[];
+  assetsPending: boolean;
+  onRefreshAssets: () => Promise<void>;
+  onUploadAsset: (file: File) => Promise<string | null>;
+};
 
 const initialState: SaveState = {
   ok: false,
@@ -91,6 +114,12 @@ export function AdminEditor({
   const [activeSection, setActiveSection] = useState<SectionId>("design");
   const [state, setState] = useState<SaveState>(initialState);
   const [pendingSection, setPendingSection] = useState<SectionId | null>(null);
+  const [assets, setAssets] = useState<PortfolioAsset[]>([]);
+  const [assetsPending, setAssetsPending] = useState(false);
+
+  useEffect(() => {
+    void refreshAssets();
+  }, []);
 
   const dirty = useMemo(() => {
     return JSON.stringify(content) !== JSON.stringify(savedContent);
@@ -98,6 +127,12 @@ export function AdminEditor({
 
   const active = sectionConfig[activeSection];
   const ActiveIcon = active.icon;
+  const imageTools: ImageTools = {
+    assets,
+    assetsPending,
+    onRefreshAssets: refreshAssets,
+    onUploadAsset: uploadAsset
+  };
 
   function updateContent(mutator: (next: PortfolioContent) => void) {
     setContent((current) => {
@@ -106,6 +141,83 @@ export function AdminEditor({
       return next;
     });
     setState(initialState);
+  }
+
+  async function refreshAssets() {
+    setAssetsPending(true);
+
+    try {
+      const response = await fetch("/api/admin/assets", {
+        method: "GET"
+      });
+      const result = (await response.json().catch(() => null)) as {
+        ok?: boolean;
+        assets?: PortfolioAsset[];
+        error?: string;
+      } | null;
+
+      if (!response.ok || !result?.ok) {
+        setState({
+          ok: false,
+          message: result?.error ?? "Unable to load Supabase assets."
+        });
+        return;
+      }
+
+      setAssets(result.assets ?? []);
+    } catch (error) {
+      setState({
+        ok: false,
+        message:
+          error instanceof Error ? error.message : "Unable to load Supabase assets."
+      });
+    } finally {
+      setAssetsPending(false);
+    }
+  }
+
+  async function uploadAsset(file: File) {
+    setAssetsPending(true);
+    setState(initialState);
+
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const response = await fetch("/api/admin/assets", {
+        method: "POST",
+        body: formData
+      });
+      const result = (await response.json().catch(() => null)) as {
+        ok?: boolean;
+        asset?: PortfolioAsset;
+        error?: string;
+      } | null;
+
+      if (!response.ok || !result?.ok || !result.asset) {
+        setState({
+          ok: false,
+          message: result?.error ?? "Unable to upload image."
+        });
+        return null;
+      }
+
+      setAssets((current) => [result.asset as PortfolioAsset, ...current]);
+      setState({
+        ok: true,
+        message: "Uploaded image to Supabase Storage."
+      });
+
+      return result.asset.publicUrl;
+    } catch (error) {
+      setState({
+        ok: false,
+        message: error instanceof Error ? error.message : "Unable to upload image."
+      });
+      return null;
+    } finally {
+      setAssetsPending(false);
+    }
   }
 
   async function handleSave(section: SectionId = activeSection) {
@@ -259,7 +371,11 @@ export function AdminEditor({
 
         <div className="editor-body">
           {activeSection === "design" ? (
-            <DesignSection content={content} updateContent={updateContent} />
+            <DesignSection
+              content={content}
+              updateContent={updateContent}
+              imageTools={imageTools}
+            />
           ) : null}
           {activeSection === "ui" ? (
             <UiSection content={content} updateContent={updateContent} />
@@ -270,6 +386,7 @@ export function AdminEditor({
               updateContent={updateContent}
               onAddContact={addContact}
               onAddProject={addProject}
+              imageTools={imageTools}
             />
           ) : null}
         </div>
@@ -306,10 +423,12 @@ export function AdminEditor({
 
 function DesignSection({
   content,
-  updateContent
+  updateContent,
+  imageTools
 }: {
   content: PortfolioContent;
   updateContent: (mutator: (next: PortfolioContent) => void) => void;
+  imageTools: ImageTools;
 }) {
   return (
     <div className="editor-columns">
@@ -323,6 +442,16 @@ function DesignSection({
               next.theme.name = value;
             })
           }
+        />
+        <ImageField
+          label="Background image"
+          value={content.theme.backgroundImageUrl}
+          onChange={(value) =>
+            updateContent((next) => {
+              next.theme.backgroundImageUrl = value;
+            })
+          }
+          imageTools={imageTools}
         />
         <div className="range-row">
           <label className="field">
@@ -412,6 +541,15 @@ function UiSection({
     <div className="editor-columns">
       <fieldset className="field-group">
         <legend>Intro screen</legend>
+        <TextField
+          label="Browser tab name"
+          value={content.ui.browserTabName}
+          onChange={(value) =>
+            updateContent((next) => {
+              next.ui.browserTabName = value;
+            })
+          }
+        />
         <TextField
           label="Logo text"
           value={content.profile.logoText}
@@ -568,12 +706,14 @@ function PortfolioSection({
   content,
   updateContent,
   onAddContact,
-  onAddProject
+  onAddProject,
+  imageTools
 }: {
   content: PortfolioContent;
   updateContent: (mutator: (next: PortfolioContent) => void) => void;
   onAddContact: () => void;
   onAddProject: () => void;
+  imageTools: ImageTools;
 }) {
   return (
     <div className="editor-stack">
@@ -626,6 +766,7 @@ function PortfolioSection({
                 next.profile.avatarUrl = value;
               })
             }
+            imageTools={imageTools}
           />
           <ImageField
             label="Hero/background image"
@@ -635,6 +776,7 @@ function PortfolioSection({
                 next.profile.heroImageUrl = value;
               })
             }
+            imageTools={imageTools}
           />
         </div>
       </fieldset>
@@ -943,6 +1085,7 @@ function PortfolioSection({
                     next.projects[index].imageUrl = value;
                   })
                 }
+                imageTools={imageTools}
               />
               <ListGroup
                 title="Tags"
@@ -1063,26 +1206,88 @@ function TextareaField({
 function ImageField({
   label,
   value,
-  onChange
+  onChange,
+  imageTools
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
+  imageTools: ImageTools;
 }) {
+  async function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+
+    if (!file) {
+      return;
+    }
+
+    const publicUrl = await imageTools.onUploadAsset(file);
+    if (publicUrl) {
+      onChange(publicUrl);
+    }
+
+    event.target.value = "";
+  }
+
   return (
-    <label className="field image-field">
+    <div className="field image-field">
       <span>{label}</span>
       <span className="image-input-row">
         <span className="image-preview" aria-hidden="true">
           {value ? <img src={value} alt="" /> : <ImageIcon size={18} />}
         </span>
-        <input
-          value={value}
-          placeholder="/assets/image.png or https://..."
-          onChange={(event) => onChange(event.target.value)}
-        />
+        <span className="image-field-main">
+          <input
+            value={value}
+            placeholder="Supabase image URL or https://..."
+            onChange={(event) => onChange(event.target.value)}
+          />
+          <span className="asset-actions">
+            <label className="ghost-button compact-button asset-upload-button">
+              <Upload size={15} aria-hidden="true" />
+              Upload
+              <input
+                type="file"
+                accept="image/gif,image/jpeg,image/png,image/svg+xml,image/webp"
+                disabled={imageTools.assetsPending}
+                onChange={handleFileChange}
+              />
+            </label>
+            <button
+              className="ghost-button compact-button"
+              type="button"
+              disabled={imageTools.assetsPending}
+              onClick={() => void imageTools.onRefreshAssets()}
+            >
+              <RefreshCw size={15} aria-hidden="true" />
+              Refresh
+            </button>
+          </span>
+        </span>
       </span>
-    </label>
+      <details className="asset-picker">
+        <summary>
+          {imageTools.assets.length > 0
+            ? `Choose uploaded asset (${imageTools.assets.length})`
+            : "No uploaded assets yet"}
+        </summary>
+        {imageTools.assets.length > 0 ? (
+          <div className="asset-grid">
+            {imageTools.assets.map((asset) => (
+              <button
+                type="button"
+                className={asset.publicUrl === value ? "asset-tile active" : "asset-tile"}
+                key={asset.path}
+                onClick={() => onChange(asset.publicUrl)}
+              >
+                <img src={asset.publicUrl} alt="" />
+                <span>{asset.name}</span>
+              </button>
+            ))}
+          </div>
+        ) : null}
+      </details>
+    </div>
   );
 }
 

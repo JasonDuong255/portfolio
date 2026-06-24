@@ -1,13 +1,18 @@
 import type { Metadata } from "next";
+import { getPortfolioContent } from "@/lib/portfolio/storage";
 import "@/app/globals.css";
 
-export const metadata: Metadata = {
-  title: "M. Choice Pixel Portfolio",
-  description: "A pixel-art portfolio with editable Supabase CMS content.",
-  icons: {
-    icon: "/favicon.png"
-  }
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const content = await getPortfolioContent();
+
+  return {
+    title: content.ui.browserTabName,
+    description: content.profile.tagline,
+    icons: {
+      icon: "/favicon.png"
+    }
+  };
+}
 
 export default function RootLayout({
   children

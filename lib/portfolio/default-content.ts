@@ -104,6 +104,7 @@ export const defaultPortfolioContent: PortfolioContent = {
   ],
   theme: {
     name: "Nebula Candy CRT",
+    backgroundImageUrl: "/assets/m-choice-hero.png",
     colors: {
       space: "#070313",
       ink: "#09070f",

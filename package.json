@@ -5,11 +5,13 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "db:migrate": "node scripts/apply-supabase-schema.mjs",
     "start": "next start",
     "typecheck": "tsc --noEmit",
     "qa:ui": "node scripts/ui-qa.mjs"
   },
   "dependencies": {
+    "@supabase/server": "^1.2.0",
     "@supabase/ssr": "0.12.0",
     "@supabase/supabase-js": "2.108.2",
     "lucide-react": "1.21.0",
@@ -20,8 +22,10 @@
   },
   "devDependencies": {
     "@types/node": "26.0.0",
+    "@types/pg": "^8.20.0",
     "@types/react": "19.2.17",
     "@types/react-dom": "19.2.3",
+    "pg": "^8.22.0",
     "playwright-core": "1.57.0",
     "typescript": "6.0.3"
   },

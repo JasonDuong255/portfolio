@@ -99,7 +99,7 @@ export function PortfolioDesktop({ content }: { content: PortfolioContent }) {
     >
       <div
         className="nebula-art"
-        style={{ backgroundImage: `url("${content.profile.heroImageUrl}")` }}
+        style={{ backgroundImage: `url("${content.theme.backgroundImageUrl}")` }}
         aria-hidden="true"
       />
       <div className="star-grid" aria-hidden="true" />

@@ -52,6 +52,10 @@ function withSafeAssetPaths(content: PortfolioContent): PortfolioContent {
     next.profile.heroImageUrl,
     defaultPortfolioContent.profile.heroImageUrl
   );
+  next.theme.backgroundImageUrl = safeLocalAsset(
+    next.theme.backgroundImageUrl,
+    defaultPortfolioContent.theme.backgroundImageUrl
+  );
   next.projects = next.projects.map((project, index) => ({
     ...project,
     imageUrl: safeLocalAsset(

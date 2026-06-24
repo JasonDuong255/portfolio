@@ -2,6 +2,7 @@ import { z } from "zod";
 
 export const themeSchema = z.object({
   name: z.string().min(1),
+  backgroundImageUrl: z.string().min(1).default("/assets/m-choice-hero.png"),
   colors: z.object({
     space: z.string().min(1),
     ink: z.string().min(1),
@@ -44,6 +45,7 @@ export const projectSchema = z.object({
 });
 
 export const defaultWebUiContent = {
+  browserTabName: "M. Choice Pixel Portfolio",
   introStart: "v PRESS START v",
   contactsWindowTitle: "",
   contactsHeading: "My Contacts:",
@@ -60,6 +62,7 @@ export const defaultWebUiContent = {
 
 export const webUiContentSchema = z
   .object({
+    browserTabName: z.string().min(1).default(defaultWebUiContent.browserTabName),
     introStart: z.string().min(1),
     contactsWindowTitle: z.string(),
     contactsHeading: z.string().min(1),

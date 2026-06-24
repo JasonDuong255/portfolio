@@ -67,8 +67,10 @@ function SetupPanel() {
         <h1>Connect Supabase</h1>
         <p>
           Add `NEXT_PUBLIC_SUPABASE_URL` and
-          `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` to `.env.local`, then run the
-          SQL in `supabase/schema.sql`.
+          `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` to `.env.local`, add a backend
+          `SUPABASE_SECRET_KEY`, then run `supabase/schema.sql` in Supabase SQL
+          Editor. It creates `portfolio_content`, `portfolio_assets`, and the
+          `portfolio-assets` storage bucket.
         </p>
       </section>
     </main>

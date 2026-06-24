@@ -1,0 +1,4 @@
+interface:
+  display_name: "Taste Skill"
+  short_description: "Sharper UI taste for signature portfolio work"
+  default_prompt: "Use $taste-skill to make this interface feel signature, intentional, and less agentic."

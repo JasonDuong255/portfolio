@@ -68,9 +68,10 @@ function SetupPanel() {
         <p>
           Add `NEXT_PUBLIC_SUPABASE_URL` and
           `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` to `.env.local`, add a backend
-          `SUPABASE_SECRET_KEY`, then run `supabase/schema.sql` in Supabase SQL
-          Editor. It creates `portfolio_content`, `portfolio_assets`, and the
-          `portfolio-assets` storage bucket.
+          `SUPABASE_SECRET_KEY`, then run `npm run db:migrate`. It creates
+          separate Supabase tables for design config, web UI labels, portfolio
+          content, uploaded asset metadata, and the `portfolio-assets` storage
+          bucket.
         </p>
       </section>
     </main>

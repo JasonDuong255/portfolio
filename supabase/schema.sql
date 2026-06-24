@@ -131,6 +131,7 @@ values (
     },
     "ui": {
       "browserTabName": "M. Choice Pixel Portfolio",
+      "browserTabImageUrl": "/favicon.png",
       "introStart": "v PRESS START v",
       "contactsWindowTitle": "",
       "contactsHeading": "My Contacts:",
@@ -175,6 +176,7 @@ create table if not exists public.portfolio_design_config (
 create table if not exists public.portfolio_web_ui_content (
   id text primary key default 'main',
   browser_tab_name text not null,
+  browser_tab_image_url text not null default '/favicon.png',
   intro_start text not null,
   contacts_window_title text not null default '',
   contacts_heading text not null,
@@ -187,6 +189,9 @@ create table if not exists public.portfolio_web_ui_content (
   taskbar_contacts_label text not null,
   updated_at timestamptz not null default now()
 );
+
+alter table public.portfolio_web_ui_content
+add column if not exists browser_tab_image_url text not null default '/favicon.png';
 
 create table if not exists public.portfolio_profile_content (
   id text primary key default 'main',
@@ -321,6 +326,7 @@ on conflict (id) do nothing;
 insert into public.portfolio_web_ui_content (
   id,
   browser_tab_name,
+  browser_tab_image_url,
   intro_start,
   contacts_window_title,
   contacts_heading,
@@ -335,6 +341,7 @@ insert into public.portfolio_web_ui_content (
 select
   'main',
   coalesce(content #>> '{ui,browserTabName}', 'M. Choice Pixel Portfolio'),
+  coalesce(content #>> '{ui,browserTabImageUrl}', '/favicon.png'),
   coalesce(content #>> '{ui,introStart}', 'v PRESS START v'),
   coalesce(content #>> '{ui,contactsWindowTitle}', ''),
   coalesce(content #>> '{ui,contactsHeading}', 'My Contacts:'),

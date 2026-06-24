@@ -9,7 +9,7 @@ export async function generateMetadata(): Promise<Metadata> {
     title: content.ui.browserTabName,
     description: content.profile.tagline,
     icons: {
-      icon: "/favicon.png"
+      icon: content.ui.browserTabImageUrl
     }
   };
 }

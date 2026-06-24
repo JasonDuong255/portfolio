@@ -44,6 +44,7 @@ type DesignRow = {
 
 type WebUiRow = {
   browser_tab_name: string | null;
+  browser_tab_image_url: string | null;
   intro_start: string | null;
   contacts_window_title: string | null;
   contacts_heading: string | null;
@@ -383,6 +384,10 @@ function mapWebUi(row: WebUiRow | null): PortfolioContent["ui"] {
 
   return {
     browserTabName: textOr(row?.browser_tab_name, fallback.browserTabName),
+    browserTabImageUrl: textOr(
+      row?.browser_tab_image_url,
+      fallback.browserTabImageUrl
+    ),
     introStart: textOr(row?.intro_start, fallback.introStart),
     contactsWindowTitle: row?.contacts_window_title ?? fallback.contactsWindowTitle,
     contactsHeading: textOr(row?.contacts_heading, fallback.contactsHeading),
@@ -509,6 +514,7 @@ function toWebUiRow(content: PortfolioContent, updatedAt: string) {
   return {
     id: CONTENT_ID,
     browser_tab_name: content.ui.browserTabName,
+    browser_tab_image_url: content.ui.browserTabImageUrl,
     intro_start: content.ui.introStart,
     contacts_window_title: content.ui.contactsWindowTitle,
     contacts_heading: content.ui.contactsHeading,
@@ -587,6 +593,10 @@ function withSafeAssetPaths(content: PortfolioContent): PortfolioContent {
   next.theme.backgroundImageUrl = safeLocalAsset(
     next.theme.backgroundImageUrl,
     defaultPortfolioContent.theme.backgroundImageUrl
+  );
+  next.ui.browserTabImageUrl = safeLocalAsset(
+    next.ui.browserTabImageUrl,
+    defaultPortfolioContent.ui.browserTabImageUrl
   );
   next.projects = next.projects.map((project, index) => ({
     ...project,

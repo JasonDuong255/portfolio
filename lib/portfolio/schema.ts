@@ -46,6 +46,7 @@ export const projectSchema = z.object({
 
 export const defaultWebUiContent = {
   browserTabName: "M. Choice Pixel Portfolio",
+  browserTabImageUrl: "/favicon.png",
   introStart: "v PRESS START v",
   contactsWindowTitle: "",
   contactsHeading: "My Contacts:",
@@ -63,6 +64,10 @@ export const defaultWebUiContent = {
 export const webUiContentSchema = z
   .object({
     browserTabName: z.string().min(1).default(defaultWebUiContent.browserTabName),
+    browserTabImageUrl: z
+      .string()
+      .min(1)
+      .default(defaultWebUiContent.browserTabImageUrl),
     introStart: z.string().min(1),
     contactsWindowTitle: z.string(),
     contactsHeading: z.string().min(1),

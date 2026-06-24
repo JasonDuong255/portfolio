@@ -378,7 +378,11 @@ export function AdminEditor({
             />
           ) : null}
           {activeSection === "ui" ? (
-            <UiSection content={content} updateContent={updateContent} />
+            <UiSection
+              content={content}
+              updateContent={updateContent}
+              imageTools={imageTools}
+            />
           ) : null}
           {activeSection === "portfolio" ? (
             <PortfolioSection
@@ -532,10 +536,12 @@ function DesignSection({
 
 function UiSection({
   content,
-  updateContent
+  updateContent,
+  imageTools
 }: {
   content: PortfolioContent;
   updateContent: (mutator: (next: PortfolioContent) => void) => void;
+  imageTools: ImageTools;
 }) {
   return (
     <div className="editor-columns">
@@ -547,6 +553,16 @@ function UiSection({
           onChange={(value) =>
             updateContent((next) => {
               next.ui.browserTabName = value;
+            })
+          }
+        />
+        <ImageField
+          label="Browser tab image"
+          value={content.ui.browserTabImageUrl}
+          imageTools={imageTools}
+          onChange={(value) =>
+            updateContent((next) => {
+              next.ui.browserTabImageUrl = value;
             })
           }
         />

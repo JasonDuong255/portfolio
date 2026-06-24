@@ -21,13 +21,6 @@ const initialWindows: Record<WindowId, WindowState> = {
   projects: { x: 280, y: 332, width: 780, open: true, z: 2 }
 };
 
-const taskbarItems: Array<{ id: WindowId; label: string }> = [
-  { id: "about", label: "About_Me.txt" },
-  { id: "presentation", label: "Apresentation.txt" },
-  { id: "projects", label: "Projects.exe" },
-  { id: "contacts", label: "Contacts" }
-];
-
 export function PortfolioDesktop({ content }: { content: PortfolioContent }) {
   const [introVisible, setIntroVisible] = useState(true);
   const [windows, setWindows] = useState(initialWindows);
@@ -44,6 +37,12 @@ export function PortfolioDesktop({ content }: { content: PortfolioContent }) {
       minute: "2-digit"
     }).format(new Date());
   }, []);
+  const taskbarItems: Array<{ id: WindowId; label: string }> = [
+    { id: "about", label: content.ui.taskbarLabels.about },
+    { id: "presentation", label: content.ui.taskbarLabels.presentation },
+    { id: "projects", label: content.ui.taskbarLabels.projects },
+    { id: "contacts", label: content.ui.taskbarLabels.contacts }
+  ];
 
   function focus(id: WindowId) {
     setZTop((current) => {
@@ -98,7 +97,11 @@ export function PortfolioDesktop({ content }: { content: PortfolioContent }) {
       onPointerUp={stopDrag}
       onPointerLeave={stopDrag}
     >
-      <div className="nebula-art" aria-hidden="true" />
+      <div
+        className="nebula-art"
+        style={{ backgroundImage: `url("${content.profile.heroImageUrl}")` }}
+        aria-hidden="true"
+      />
       <div className="star-grid" aria-hidden="true" />
       <div className="scanlines" aria-hidden="true" />
 
@@ -113,7 +116,7 @@ export function PortfolioDesktop({ content }: { content: PortfolioContent }) {
           <span className="intro-logo">{content.profile.logoText}</span>
           <span className="intro-name">{content.profile.name}</span>
           <span className="intro-title">{content.profile.title}</span>
-          <span className="intro-start">▾ PRESS START ▾</span>
+          <span className="intro-start">{content.ui.introStart}</span>
         </button>
       ) : null}
 
@@ -127,7 +130,7 @@ export function PortfolioDesktop({ content }: { content: PortfolioContent }) {
           {windows.contacts.open && (
             <PixelWindow
               id="contacts"
-              title=""
+              title={content.ui.contactsWindowTitle}
               state={windows.contacts}
               onFocus={focus}
               onClose={close}
@@ -144,7 +147,7 @@ export function PortfolioDesktop({ content }: { content: PortfolioContent }) {
                 </div>
                 <p className="contact-name">{content.profile.name}</p>
                 <p className="contact-title">{content.profile.title}</p>
-                <h2>My Contacts:</h2>
+                <h2>{content.ui.contactsHeading}</h2>
                 <div className="contact-list">
                   {content.contacts.map((contact) => (
                     <a href={contact.href} key={contact.id} className="contact-row">
@@ -157,7 +160,7 @@ export function PortfolioDesktop({ content }: { content: PortfolioContent }) {
                   ))}
                 </div>
                 <button className="pixel-button" type="button" onClick={() => close("contacts")}>
-                  got it!
+                  {content.ui.contactButton}
                 </button>
               </section>
             </PixelWindow>
@@ -225,7 +228,7 @@ export function PortfolioDesktop({ content }: { content: PortfolioContent }) {
           {windows.projects.open && (
             <PixelWindow
               id="projects"
-              title="Projects.exe"
+              title={content.ui.projectsWindowTitle}
               state={windows.projects}
               onFocus={focus}
               onClose={close}
@@ -243,7 +246,7 @@ export function PortfolioDesktop({ content }: { content: PortfolioContent }) {
                         <span key={tag}>{tag}</span>
                       ))}
                     </div>
-                    <a href={project.href}>view work &#8599;</a>
+                    <a href={project.href}>{content.ui.projectLinkLabel} &#8599;</a>
                   </article>
                 ))}
               </div>

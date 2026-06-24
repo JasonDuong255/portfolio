@@ -193,12 +193,16 @@ async function checkPage(browser, pageSpec, viewport) {
           scrollWidth: element.scrollWidth,
           clientWidth: element.clientWidth,
           decorative,
+          formControl: ["INPUT", "TEXTAREA", "SELECT"].includes(element.tagName),
           hiddenOverflow,
           positioned
         };
       })
       .filter((item) => {
         if (item.decorative || item.hiddenOverflow || item.positioned) return false;
+        if (item.formControl) {
+          return item.right > viewportWidth + 2 || item.left < -2;
+        }
         return (
           item.right > viewportWidth + 2 ||
           item.left < -2 ||

@@ -1,4 +1,7 @@
-import type { PortfolioContent } from "@/lib/portfolio/schema";
+import {
+  defaultWebUiContent,
+  type PortfolioContent
+} from "@/lib/portfolio/schema";
 
 export const defaultPortfolioContent: PortfolioContent = {
   profile: {
@@ -117,5 +120,6 @@ export const defaultPortfolioContent: PortfolioContent = {
     },
     scanlineOpacity: 0.22,
     pixelScale: 2
-  }
+  },
+  ui: defaultWebUiContent
 };
